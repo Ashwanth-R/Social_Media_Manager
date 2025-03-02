@@ -34,7 +34,7 @@ class BrowserTools():
     html_content = BrowserTools.fetch_website_html(website)
     if html_content:
         text = BrowserTools.extract_text(html_content)
-        chunks = [text[i:i + 4000] for i in range(0, len(text), 4000)]
+        chunks = [text[i:i + 8000] for i in range(0, len(text), 8000)]
 
         summaries = []
         for chunk in chunks:

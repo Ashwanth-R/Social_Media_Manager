@@ -15,7 +15,7 @@ class SearchTools():
     raise ValueError("serper api key is not set.")
   
   @tool("Search internet")
-  def search_internet(query, n_results=5):
+  def search_internet(query, n_results=2):
     """Useful to search the internet about a given topic and return relevant
     results."""
 
