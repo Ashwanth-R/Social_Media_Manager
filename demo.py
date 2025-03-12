@@ -44,39 +44,62 @@
 #     print("Error during tweeting:", e)
 
 
-import facebook
+# import facebook
+# import os
+# from dotenv import load_dotenv
+
+# # Load environment variables from .env file
+# load_dotenv()
+
+# # Get the Facebook access token from environment variables
+# access_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
+
+# # Check if the access token is set
+# if not access_token:
+#     raise ValueError("Facebook access token is not set.")
+
+# try:
+#     # Initialize the Facebook Graph API client
+#     graph = facebook.GraphAPI(access_token)
+    
+#     # Get the list of pages the user manages
+#     pages = graph.get_object('me/accounts')
+
+#     # Log the raw response for debugging
+#     print("Raw response:", pages)
+
+#     # Check if the response contains data
+#     if 'data' in pages and pages['data']:
+#         # Print the name and ID of each page
+#         for page in pages['data']:
+#             print(f"Page Name: {page['name']}, Page ID: {page['id']}")
+#     else:
+#         print("No pages found or insufficient permissions.")
+# except facebook.GraphAPIError as e:
+#     print(f"GraphAPIError: {e}")
+# except Exception as e:
+#     print(f"An error occurred: {e}")
+
+
 import os
+import tweepy
+from langchain.tools import tool
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
+def post_tweet(content):
+		"""Post a tweet with the given content."""
+		try:
+			api_key = os.getenv('TWITTER_API_KEY')
+			api_secret = os.getenv('TWITTER_API_SECRET')
+			access_token = os.getenv('TWITTER_ACCESS_TOKEN')
+			access_token_secret = os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
 
-# Get the Facebook access token from environment variables
-access_token = os.getenv('FACEBOOK_ACCESS_TOKEN')
+			auth = tweepy.OAuth1UserHandler(api_key, api_secret, access_token, access_token_secret)
+			api = tweepy.API(auth)
 
-# Check if the access token is set
-if not access_token:
-    raise ValueError("Facebook access token is not set.")
-
-try:
-    # Initialize the Facebook Graph API client
-    graph = facebook.GraphAPI(access_token)
-    
-    # Get the list of pages the user manages
-    pages = graph.get_object('me/accounts')
-
-    # Log the raw response for debugging
-    print("Raw response:", pages)
-
-    # Check if the response contains data
-    if 'data' in pages and pages['data']:
-        # Print the name and ID of each page
-        for page in pages['data']:
-            print(f"Page Name: {page['name']}, Page ID: {page['id']}")
-    else:
-        print("No pages found or insufficient permissions.")
-except facebook.GraphAPIError as e:
-    print(f"GraphAPIError: {e}")
-except Exception as e:
-    print(f"An error occurred: {e}")
+			api.update_status(content)
+			return "Tweet posted successfully!"
+		except Exception as e:
+			return f"An error occurred: {str(e)}"
 

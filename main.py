@@ -18,6 +18,9 @@ from instabot import Bot
 import facebook
 from openai import OpenAI
 
+os.environ["OTEL_PYTHON_DISABLED"] = "true"
+os.environ["OTEL_SDK_DISABLED"] = "true"
+
 tasks = ViralContentCreationTasks()
 agents = ViralContentCreators()
 
@@ -195,14 +198,14 @@ crew = Crew(
     agents=[
         trending_topic_researcher_agent,
         content_researcher_agent,
-        creative_agent
-        # content_posting_agent
+        creative_agent,
+        content_posting_agent
     ],
     tasks=[
         topic_analysis,
         content_research,
-        social_media_posts
-        # post_content_task
+        social_media_posts,
+        post_content_task
     ],
     process=Process.sequential,
     verbose=True,

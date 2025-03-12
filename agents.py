@@ -97,10 +97,13 @@ class ViralContentCreators:
 			role="Content Posting Agent",
 			goal=dedent("""\
 				Post content on Twitter, Instagram, and Facebook using the provided tools.
-				Ensure that each post is correctly formatted and successfully published on the respective platforms."""), 
+				Ensure that each post is correctly formatted and successfully published on the respective platforms.
+				Ensure each content is posted only once without any retries.
+				Move to the next platform after successful posting"""), 
 			backstory=dedent("""\
 				As a Content Posting Agent at a leading digital marketing agency, your role is to ensure that
-				the meticulously crafted content reaches the intended audience on various social media platforms.
+				the meticulously crafted content reaches the intended audience on various social media without any
+				redundant attempts or re-posts.
 				Your expertise in handling different social media APIs ensures seamless and effective content distribution."""), 
 			tools=[
 				TwitterTools.post_tweet,
