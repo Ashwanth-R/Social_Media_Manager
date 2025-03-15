@@ -82,24 +82,61 @@
 
 
 import os
+import requests
+import json
 import tweepy
 from langchain.tools import tool
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv()
-def post_tweet(content):
+def post_tweet(content=""):
 		"""Post a tweet with the given content."""
 		try:
-			api_key = os.getenv('TWITTER_API_KEY')
-			api_secret = os.getenv('TWITTER_API_SECRET')
-			access_token = os.getenv('TWITTER_ACCESS_TOKEN')
-			access_token_secret = os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
+			access_token = os.getenv("THREADS_TOKEN")
+			thread_user_id = os.getenv("THREADS_ID")
+			
+			message = "Bcci new rules"
+			client = OpenAI(
+                    api_key=os.getenv("OPENAI_API_KEY")
+                )
 
-			auth = tweepy.OAuth1UserHandler(api_key, api_secret, access_token, access_token_secret)
-			api = tweepy.API(auth)
+			response = client.images.generate(
+				model="dall-e-3",
+				prompt=message,
+				size="1024x1024",
+				quality="standard",
+				n=1,
+			)
 
-			api.update_status(content)
-			return "Tweet posted successfully!"
+			image_url = response.data[0].url
+		
+			url = f"https://graph.threads.net/v1.0/{thread_user_id}/threads"
+			payload = {
+				"image_url": image_url,
+				"media_type": "IMAGE",
+				"text": message,
+				"alt_text": "my_alt_text",
+				"access_token": access_token
+			}
+			response = requests.post(url, params=payload)	
+			data = response.json()
+			print(json.dumps(data, indent=4))
+			creation_id = data["id"]
+			print(f"Creation ID: {creation_id}")
+
+			post_url = f"https://graph.threads.net/v1.0/{thread_user_id}/threads_publish"
+			payload = {
+				"creation_id": creation_id,
+				"access_token": access_token
+			}
+			response = requests.post(post_url, params=payload)
+			data = response.json()
+			print(json.dumps(data, indent=4))
+			media_id = data["id"]
+			print(f"Media ID: {media_id}")
 		except Exception as e:
 			return f"An error occurred: {str(e)}"
+
+print(post_tweet())
 

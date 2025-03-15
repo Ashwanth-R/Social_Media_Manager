@@ -43,7 +43,7 @@ class ViralContentCreationTasks:
         return Task(
             description=dedent(f"""\
                 First filter out the topics that are related to {niche} and remove the ones not related.
-                Next, create 1 post each for Twitter, Instagram, and Facebook using the content research done for each of 
+                Next, create 1 post each for Threads, Instagram, and Facebook using the content research done for each of 
                     the trending topics/searches and craft engaging, valuable, and actionable posts that are ready to 
                     be published. Try to use the following structure:
                     1. Start with a Strong Hook: Begin with an intriguing question, startling fact, or 
@@ -71,15 +71,15 @@ class ViralContentCreationTasks:
                       
                 After executing this task, you should print the output.
                 Task should return an array containing all the posts for Twitter, Instagram, and Facebook in the format: 
-                [twitter_post, instagram_post, facebook_post]"""),
-            expected_output="Array containing all the social media posts in the format: [twitter_post, instagram_post, facebook_post]",
+                [threads_post, instagram_post, facebook_post]"""),
+            expected_output="Array containing all the social media posts in the format: [threads_post, instagram_post, facebook_post]",
             agent=agent
         )
 
     def post_content(self, agent):
         return Task(
             description=dedent("""\
-                Post the generated content on Twitter, Instagram, and Facebook.
+                Post the generated content on Threads, Instagram, and Facebook.
                 Ensure that each post is correctly formatted and successfully published on the respective platforms."""), 
             expected_output="Confirmation of successful posting on all platforms.",
             agent=agent
