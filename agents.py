@@ -5,7 +5,7 @@ from tools.browser_tools import BrowserTools
 from tools.search_tools import SearchTools
 from tools.trends_tools import TrendsTools
 from openai_manager import OpenAIManager
-from tools.twitter_tools import TwitterTools
+from tools.threads_tools import ThreadsTools
 from tools.instagram_tools import InstagramTools
 from tools.facebook_tools import FacebookTools
 
@@ -75,7 +75,7 @@ class ViralContentCreators:
 			goal=dedent("""\
 				Develop compelling and innovative content
 				for social media campaigns, with a focus on creating
-				high-impact posts for Twitter, Instagram, and Facebook. Make sure you don't use tools with the same arguments twice.
+				high-impact posts for Threads, Instagram, and Facebook. Make sure you don't use tools with the same arguments twice.
 				Make sure not to do more than 5 google searches."""),
 			backstory=dedent("""\
 				As a Creative Content Creator at a top-tier
@@ -83,7 +83,7 @@ class ViralContentCreators:
 				that resonate with audiences on social media.
 				Your expertise lies in turning marketing strategies
 				into engaging stories and visual content that capture
-				attention and inspire action."""),
+				attention and inspire action. All three platforms content should not be same make sure of it."""),
 			tools=[
 				BrowserTools.scrape_and_summarize_website,
 				SearchTools.search_internet
@@ -96,17 +96,18 @@ class ViralContentCreators:
 		return Agent(
 			role="Content Posting Agent",
 			goal=dedent("""\
-				Post content on Twitter, Instagram, and Facebook using the provided tools.
+				Post content on Threads, Instagram, and Facebook using the provided tools.
 				Ensure that each post is correctly formatted and successfully published on the respective platforms.
 				Ensure each content is posted only once without any retries.
-				Move to the next platform after successful posting"""), 
+				Move to the next platform after successful posting.
+			   All three platforms content should not be same make sure of it."""), 
 			backstory=dedent("""\
 				As a Content Posting Agent at a leading digital marketing agency, your role is to ensure that
 				the meticulously crafted content reaches the intended audience on various social media without any
 				redundant attempts or re-posts.
 				Your expertise in handling different social media APIs ensures seamless and effective content distribution."""), 
 			tools=[
-				TwitterTools.post_tweet,
+				ThreadsTools.post_threads,
 				InstagramTools.post_instagram,
 				FacebookTools.post_facebook
 			],

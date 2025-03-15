@@ -1,0 +1,89 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Content Creator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .loader {
+            border: 16px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 16px solid #3498db;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Social Media Content Creator</h1>
+        <input type="text" id="niche" placeholder="Enter your topic">
+        <button onclick="generateContent()">Generate</button>
+        <div id="loader" class="loader hidden"></div>
+        <div id="results" class="hidden">
+            <h2>Generated Posts</h2>
+            <p><strong>Twitter:</strong> <span id="twitter"></span></p>
+            <p><strong>Instagram:</strong> <span id="instagram"></span></p>
+            <p><strong>Facebook:</strong> <span id="facebook"></span></p>
+        </div>
+    </div>
+
+    <script>
+        function generateContent() {
+            const niche = document.getElementById('niche').value;
+            const loader = document.getElementById('loader');
+            const results = document.getElementById('results');
+            
+            loader.classList.remove('hidden');
+            results.classList.add('hidden');
+            
+            fetch('/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ niche: niche }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                loader.classList.add('hidden');
+                results.classList.remove('hidden');
+                document.getElementById('twitter').innerText = data[0];
+                document.getElementById('instagram').innerText = data[1];
+                document.getElementById('facebook').innerText = data[2];
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                loader.classList.add('hidden');
+                alert('An error occurred while generating content.');
+            });
+        }
+    </script>
+</body>
+</html>

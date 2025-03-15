@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Content Creation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f2f6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #262730;
+        }
+        h2 {
+            color: #262730;
+            margin-top: 20px;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 10px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        pre {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .post {
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Social Media Content Creation</h1>
+        <form id="contentForm">
+            <label for="niche">What topic do you want me to create content about?</label>
+            <input type="text" id="niche" name="niche" required>
+            <button type="submit">Generate Content</button>
+        </form>
+
+        <h2>Result</h2>
+        <pre id="result"></pre>
+
+        <h2>Posts</h2>
+        <div id="posts">
+            <div class="post" id="threads"></div>
+            <div class="post" id="instagram"></div>
+            <div class="post" id="facebook"></div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('contentForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const niche = document.getElementById('niche').value;
+
+            fetch('/generate_content', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ niche: niche }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('result').textContent = JSON.stringify(data.result, null, 2);
+                document.getElementById('threads').innerHTML = `<strong>Threads:</strong> ${data.posts.threads}`;
+                document.getElementById('instagram').innerHTML = `<strong>Instagram:</strong> ${data.posts.instagram}`;
+                document.getElementById('facebook').innerHTML = `<strong>Facebook:</strong> ${data.posts.facebook}`;
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+        });
+    </script>
+</body>
+</html>
