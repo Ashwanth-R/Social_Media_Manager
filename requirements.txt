@@ -11,4 +11,4 @@ langchain
 requests
 instabot
 facebook-sdk
-openai
+openai 

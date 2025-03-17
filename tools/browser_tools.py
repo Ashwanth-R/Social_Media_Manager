@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 
 from langchain.tools import tool
 from openai import OpenAI
+# from crewai_tools import tool
 
 from dotenv import load_dotenv
 load_dotenv()
