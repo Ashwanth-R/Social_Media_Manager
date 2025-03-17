@@ -551,7 +551,7 @@ def home_page():
                 st.metric("Input Tokens", metrics.get("prompt_tokens", "N/A"))
             with col2:
                 st.metric("Output Tokens", metrics.get("completion_tokens", "N/A"))
-                st.metric("successful Requests", f"${metrics.get('successful_requests', 0):.4f}")
+                st.metric("successful Requests", metrics.get('successful_requests', "N/A"))
             
             st.markdown('</div>', unsafe_allow_html=True)
         
