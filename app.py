@@ -5,13 +5,20 @@ import time
 import streamlit as st
 from dotenv import load_dotenv, set_key
 from textwrap import dedent
+
 from openai import OpenAI
+from openai_manager import OpenAIManager
 from crewai import Crew
 from crewai.process import Process
 from tasks import ViralContentCreationTasks
 from agents import ViralContentCreators
 from config import final_content
 import base64
+
+import pandas as pd
+from social_api import fetch_facebook_posts, fetch_instagram_comments, fetch_threads_comments, extract_comments
+from model import load_model, perform_sentiment_analysis
+from visualization import visualize_sentiment_distribution
 
 # Load environment variables
 load_dotenv()
@@ -92,6 +99,73 @@ st.markdown("""
     }
     .token-form input {
         margin-bottom: 1rem;
+    }
+    div.stButton > button[kind="primary"][data-testid="baseButton-primary"] {
+        background-color: #FF0000;
+        color: white;
+        border: none;
+        font-weight: bold;
+        transition: all 0.2s ease;
+    }
+    div.stButton > button[kind="primary"][data-testid="baseButton-primary"]:hover {
+        background-color: #D10000;
+    }                  
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+    /* Modern checkbox container */
+    div[data-testid="stCheckbox"] > label {
+        font-family: 'Segoe UI', sans-serif;
+        font-size: 1.1rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.1);
+        backdrop-filter: blur(5px);
+        border: 1px solid rgba(255,255,255,0.2);
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    /* Hover effects */
+    div[data-testid="stCheckbox"] > label:hover {
+        background: rgba(255,255,255,0.15);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+    
+    /* Custom checkbox design */
+    div[data-testid="stCheckbox"] > label > div:first-child {
+        border-radius: 6px !important;
+        border: 2px solid #00FFFF !important;
+        background: rgba(0,0,0,0.3) !important;
+        width: 22px !important;
+        height: 22px !important;
+    }
+    
+    /* Checked state */
+    div[data-testid="stCheckbox"] > label > div:first-child > div {
+        background-color: #00FFFF !important;
+        box-shadow: 0 0 10px #00FFFF;
+    }
+    
+    /* Platform-specific colors */
+    div[data-testid="stCheckbox"] > label[data-testid="stWidgetLabel"]:has(+ input[value="Facebook"]) {
+        color: #1877F2;
+        border-color: rgba(24, 119, 242, 0.3);
+    }
+    div[data-testid="stCheckbox"] > label[data-testid="stWidgetLabel"]:has(+ input[value="Instagram"]) {
+        color: #E1306C;
+        border-color: rgba(225, 48, 108, 0.3);
+    }
+    div[data-testid="stCheckbox"] > label[data-testid="stWidgetLabel"]:has(+ input[value="Threads"]) {
+        color: #000000;
+        border-color: rgba(0, 0, 0, 0.3);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -266,6 +340,548 @@ def display_social_media_card(platform, icon, content):
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+
+def comments_analysis_page():
+    """Display the comments analysis functionality for all platforms"""
+    st.markdown('<div class="main-header">📊 Multi-Platform Comments Analysis</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Analyze sentiment of comments across Facebook, Instagram, and Threads</div>', unsafe_allow_html=True)
+    
+    # Check credentials
+    has_facebook = os.getenv("PAGE_ID") and os.getenv("PAGE_ACCESS_TOKEN")
+    has_instagram = os.getenv("INSTA_ID") and os.getenv("INSTA_TOKEN")
+    has_threads = os.getenv("THREADS_ID") and os.getenv("THREADS_TOKEN")
+    
+    if not any([has_facebook, has_instagram, has_threads]):
+        st.error("No platform credentials configured. Please set up at least one platform in Settings.")
+        return
+    
+    # Platform selection
+    st.markdown('<div class="section-header">🔮 Platform Selection</div>', unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        analyze_facebook = st.checkbox("Facebook", value=has_facebook, disabled=not has_facebook)
+    with col2:
+        analyze_instagram = st.checkbox("Instagram", value=has_instagram, disabled=not has_instagram)
+    with col3:
+        analyze_threads = st.checkbox("Threads", value=has_threads, disabled=not has_threads)
+
+    
+    if st.button("Analyze Comments", 
+             type="primary",  # Ensures the CSS selector matches
+             key="analyze_comments_btn",  # Unique identifier
+             use_container_width=True,
+             help="Click to analyze comments across selected platforms"):
+        if not any([analyze_facebook, analyze_instagram, analyze_threads]):
+            st.error("Please select at least one platform to analyze")
+            return
+            
+        try:
+            with st.spinner("Loading sentiment analysis model..."):
+                model, vectorizer, reverse_label_mapping, metrics = load_model()
+            
+            all_results = []
+            platform_names = []
+            llm = OpenAIManager(model_name="gpt-4").create_llm(temperature=0.7)
+
+            # ========== FACEBOOK ANALYSIS ==========
+            if analyze_facebook and has_facebook:
+                with st.spinner("Analyzing Facebook comments..."):
+                    data = fetch_facebook_posts(os.getenv("PAGE_ID"), os.getenv("PAGE_ACCESS_TOKEN"))
+                    comment_texts, post_ids, captions, post_urls = extract_comments(data, 'facebook')
+                    
+                    if comment_texts:
+                        predicted_sentiments = perform_sentiment_analysis(comment_texts, model, vectorizer, reverse_label_mapping)
+                        facebook_results = pd.DataFrame({
+                            'Platform': 'Facebook',
+                            'Post ID': post_ids,
+                            'Post Caption': captions,
+                            'Post URL': post_urls,
+                            'Comment': comment_texts,
+                            'Sentiment': predicted_sentiments
+                        })
+                        all_results.append(facebook_results)
+                        
+                        posts = {}
+                        for post_id, caption, comment, sentiment, url in zip(post_ids, captions, comment_texts, predicted_sentiments, post_urls):
+                            if post_id not in posts:
+                                posts[post_id] = {
+                                    'caption': caption,
+                                    'url': url,
+                                    'comments': [],
+                                    'sentiments': []
+                                }
+                            posts[post_id]['comments'].append(comment)
+                            posts[post_id]['sentiments'].append(sentiment)
+                        
+                        with st.expander("📘 Facebook Analysis", expanded=True):
+                            st.subheader("Facebook Sentiment Analysis")
+                            
+                            for post_id, post_data in posts.items():
+                                with st.container():
+                                    # Facebook-styled post card
+                                    st.markdown(f"""
+                                    <div style="
+                                        background: linear-gradient(145deg, #1877F2, #4599FF, #A0C4FF);
+                                        border-radius: 10px;
+                                        padding: 15px;
+                                        margin-bottom: 20px;
+                                        color: white;
+                                        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                                        transition: all 0.3s ease;
+                                    ">
+                                        <h4 style="margin-top:0;">
+                                            <a href="{post_data['url']}" target="_blank" style="color: white; text-decoration: none;">
+                                                {post_data['caption'][:100]}{'...' if len(post_data['caption']) > 100 else ''}
+                                            </a>
+                                        </h4>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                    # Sentiment metrics
+                                    post_sentiments = post_data['sentiments']
+                                    pos_count = post_sentiments.count('Positive')
+                                    neu_count = post_sentiments.count('Neutral')
+                                    neg_count = post_sentiments.count('Negative')
+                                    total = len(post_sentiments)
+                                    
+                                    st.markdown(f"""
+                                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                                        <div style="flex: 1; background: #4CAF5010; border-left: 4px solid #4CAF50; border-radius: 5px; padding: 10px;">
+                                            <div style="font-size: 12px; color: #4CAF50;">Positive</div>
+                                            <div style="font-size: 16px; font-weight: bold;">{pos_count} ({pos_count/total*100:.1f}%)</div>
+                                        </div>
+                                        <div style="flex: 1; background: #FFC10710; border-left: 4px solid #FFC107; border-radius: 5px; padding: 10px;">
+                                            <div style="font-size: 12px; color: #FFC107;">Neutral</div>
+                                            <div style="font-size: 16px; font-weight: bold;">{neu_count} ({neu_count/total*100:.1f}%)</div>
+                                        </div>
+                                        <div style="flex: 1; background: #F4433610; border-left: 4px solid #F44336; border-radius: 5px; padding: 10px;">
+                                            <div style="font-size: 12px; color: #F44336;">Negative</div>
+                                            <div style="font-size: 16px; font-weight: bold;">{neg_count} ({neg_count/total*100:.1f}%)</div>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                    # Comments display
+                                    for comment, sentiment in zip(post_data['comments'], post_data['sentiments']):
+                                        color = "#4CAF50" if sentiment == "Positive" else "#F44336" if sentiment == "Negative" else "#FFC107"
+                                        emoji = "😊" if sentiment == "Positive" else "😞" if sentiment == "Negative" else "😐"
+                                        
+                                        st.markdown(f"""
+                                        <div style="
+                                            background: {color}10;
+                                            border-left: 4px solid {color};
+                                            border-radius: 4px;
+                                            padding: 10px;
+                                            margin: 5px 0;
+                                            font-size: 14px;
+                                        ">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span style="font-size: 18px;">{emoji}</span>
+                                                <span>{comment}</span>
+                                            </div>
+                                            <div style="margin-top: 5px; font-size: 12px; color: {color};">
+                                                Sentiment: <strong>{sentiment}</strong>
+                                            </div>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+
+                                    # # Generate AI recommendations for this post
+                                    # with st.spinner("Generating AI insights..."):
+                                    #     try:
+                                    #         # Prepare comment samples for context
+                                    #         sample_comments = "\n".join([f"- {c}" for c in post_data['comments'][:5]])
+                                            
+                                    #         response = llm.invoke(f"""
+                                    #         Analyze this Facebook post and its comments to provide 2-3 actionable recommendations:
+
+                                    #         Post Content: {post_data['caption']}
+                                            
+                                    #         Sentiment Distribution:
+                                    #         - Positive: {pos_count} ({pos_count/total*100:.1f}%)
+                                    #         - Neutral: {neu_count} ({neu_count/total*100:.1f}%)
+                                    #         - Negative: {neg_count} ({neg_count/total*100:.1f}%)
+                                            
+                                    #         Sample Comments:
+                                    #         {sample_comments}
+                                            
+                                    #         Provide concise recommendations focusing on:
+                                    #         1. How to improve engagement based on positive feedback
+                                    #         2. How to address any concerns from negative comments
+                                    #         3. Content strategy adjustments if needed
+                                            
+                                    #         Format as bullet points with 🚀, 🛠️, and 💡 emojis.
+                                    #         """)
+                                            
+                                    #         # Display recommendations in styled card
+                                    #         st.markdown(f"""
+                                    #         <div style="
+                                    #             background: #F5F8FA;
+                                    #             border-radius: 10px;
+                                    #             padding: 15px;
+                                    #             margin: 20px 0;
+                                    #             border-left: 4px solid #1DA1F2;
+                                    #         ">
+                                    #             <h4 style="margin-top:0; color: #1DA1F2;">AI Recommendations</h4>
+                                    #             {response.content}
+                                    #         </div>
+                                    #         """, unsafe_allow_html=True)
+                                    #     except Exception as e:
+                                    #         st.error(f"Couldn't generate recommendations: {str(e)}")
+
+                            
+                            platform_names.append('Facebook')
+
+            # ========== INSTAGRAM ANALYSIS ==========
+            if analyze_instagram and has_instagram:
+                with st.spinner("Analyzing Instagram comments..."):
+                    data = fetch_instagram_comments(os.getenv("INSTA_ID"), os.getenv("INSTA_TOKEN"))
+                    comment_texts, post_ids, captions, post_urls = extract_comments(data, 'instagram')
+                    
+                    if comment_texts:
+                        predicted_sentiments = perform_sentiment_analysis(comment_texts, model, vectorizer, reverse_label_mapping)
+                        instagram_results = pd.DataFrame({
+                            'Platform': 'Instagram',
+                            'Post ID': post_ids,
+                            'Post Caption': captions,
+                            'Post URL': post_urls,
+                            'Comment': comment_texts,
+                            'Sentiment': predicted_sentiments
+                        })
+                        all_results.append(instagram_results)
+                        
+                        posts = {}
+                        for post_id, caption, comment, sentiment, url in zip(post_ids, captions, comment_texts, predicted_sentiments, post_urls):
+                            if post_id not in posts:
+                                posts[post_id] = {
+                                    'caption': caption,
+                                    'url': url,
+                                    'comments': [],
+                                    'sentiments': []
+                                }
+                            posts[post_id]['comments'].append(comment)
+                            posts[post_id]['sentiments'].append(sentiment)
+                        
+                        with st.expander("📷 Instagram Analysis", expanded=True):
+                            st.subheader("Instagram Sentiment Analysis")
+                            
+                            for post_id, post_data in posts.items():
+                                with st.container():
+                                    # Instagram-styled post card
+                                    st.markdown(f"""
+                                    <div style="
+                                        background: linear-gradient(145deg, #833AB4, #E1306C, #FCAF45);
+                                        border-radius: 10px;
+                                        padding: 15px;
+                                        margin-bottom: 20px;
+                                        color: white;
+                                        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                                    ">
+                                        <h4 style="margin-top:0;">
+                                            <a href="{post_data['url']}" target="_blank" style="color: white; text-decoration: none;">
+                                                {post_data['caption'][:100]}{'...' if len(post_data['caption']) > 100 else ''}
+                                            </a>
+                                        </h4>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                    # Sentiment metrics
+                                    post_sentiments = post_data['sentiments']
+                                    pos_count = post_sentiments.count('Positive')
+                                    neu_count = post_sentiments.count('Neutral')
+                                    neg_count = post_sentiments.count('Negative')
+                                    total = len(post_sentiments)
+                                    
+                                    st.markdown(f"""
+                                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                                        <div style="flex: 1; background: #4CAF5010; border-left: 4px solid #4CAF50; border-radius: 5px; padding: 10px;">
+                                            <div style="font-size: 12px; color: #4CAF50;">Positive</div>
+                                            <div style="font-size: 16px; font-weight: bold;">{pos_count} ({pos_count/total*100:.1f}%)</div>
+                                        </div>
+                                        <div style="flex: 1; background: #FFC10710; border-left: 4px solid #FFC107; border-radius: 5px; padding: 10px;">
+                                            <div style="font-size: 12px; color: #FFC107;">Neutral</div>
+                                            <div style="font-size: 16px; font-weight: bold;">{neu_count} ({neu_count/total*100:.1f}%)</div>
+                                        </div>
+                                        <div style="flex: 1; background: #F4433610; border-left: 4px solid #F44336; border-radius: 5px; padding: 10px;">
+                                            <div style="font-size: 12px; color: #F44336;">Negative</div>
+                                            <div style="font-size: 16px; font-weight: bold;">{neg_count} ({neg_count/total*100:.1f}%)</div>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                    # Comments display
+                                    for comment, sentiment in zip(post_data['comments'], post_data['sentiments']):
+                                        color = "#4CAF50" if sentiment == "Positive" else "#F44336" if sentiment == "Negative" else "#FFC107"
+                                        emoji = "🌟" if sentiment == "Positive" else "💔" if sentiment == "Negative" else "💭"
+                                        
+                                        st.markdown(f"""
+                                        <div style="
+                                            background: {color}10;
+                                            border-left: 4px solid {color};
+                                            border-radius: 4px;
+                                            padding: 10px;
+                                            margin: 5px 0;
+                                            font-size: 14px;
+                                        ">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span style="font-size: 18px;">{emoji}</span>
+                                                <span>{comment}</span>
+                                            </div>
+                                            <div style="margin-top: 5px; font-size: 12px; color: {color};">
+                                                Sentiment: <strong>{sentiment}</strong>
+                                            </div>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                    
+                                    # # Generate AI recommendations for this post
+                                    # with st.spinner("Generating AI insights..."):
+                                    #     try:
+                                    #         # Prepare comment samples for context
+                                    #         sample_comments = "\n".join([f"- {c}" for c in post_data['comments'][:5]])
+                                            
+                                    #         response = llm.invoke(f"""
+                                    #         Analyze this Instagram post and its comments to provide 2-3 actionable recommendations:
+
+                                    #         Post Content: {post_data['caption']}
+                                            
+                                    #         Sentiment Distribution:
+                                    #         - Positive: {pos_count} ({pos_count/total*100:.1f}%)
+                                    #         - Neutral: {neu_count} ({neu_count/total*100:.1f}%)
+                                    #         - Negative: {neg_count} ({neg_count/total*100:.1f}%)
+                                            
+                                    #         Sample Comments:
+                                    #         {sample_comments}
+                                            
+                                    #         Provide concise recommendations focusing on:
+                                    #         1. How to improve visual content based on engagement
+                                    #         2. How to respond to negative feedback
+                                    #         3. Hashtag or caption strategy adjustments
+                                            
+                                    #         Format as bullet points with 📸, 💬, and 🔍 emojis.
+                                    #         """)
+                                            
+                                    #         # Display recommendations in styled card
+                                    #         st.markdown(f"""
+                                    #         <div style="
+                                    #             background: #F5F8FA;
+                                    #             border-radius: 10px;
+                                    #             padding: 15px;
+                                    #             margin: 20px 0;
+                                    #             border-left: 4px solid #E1306C;
+                                    #         ">
+                                    #             <h4 style="margin-top:0; color: #E1306C;">AI Recommendations</h4>
+                                    #             {response.content}
+                                    #         </div>
+                                    #         """, unsafe_allow_html=True)
+                                    #     except Exception as e:
+                                    #         st.error(f"Couldn't generate recommendations: {str(e)}")
+                            
+                            platform_names.append('Instagram')
+
+            # ========== THREADS ANALYSIS ==========
+            if analyze_threads and has_threads:
+                with st.spinner("Analyzing Threads comments..."):
+                    data = fetch_threads_comments(os.getenv("THREADS_ID"), os.getenv("THREADS_TOKEN"))
+                    comment_texts, post_ids, captions, post_urls = extract_comments(data, 'threads', os.getenv("THREADS_TOKEN"))
+                    
+                    if comment_texts:
+                        predicted_sentiments = perform_sentiment_analysis(comment_texts, model, vectorizer, reverse_label_mapping)
+                        threads_results = pd.DataFrame({
+                            'Platform': 'Threads',
+                            'Post ID': post_ids,
+                            'Post Caption': captions,
+                            'Post URL': post_urls,
+                            'Comment': comment_texts,
+                            'Sentiment': predicted_sentiments
+                        })
+                        all_results.append(threads_results)
+                        
+                        posts = {}
+                        for post_id, caption, comment, sentiment, url in zip(post_ids, captions, comment_texts, predicted_sentiments, post_urls):
+                            if post_id not in posts:
+                                posts[post_id] = {
+                                    'caption': caption,
+                                    'url': url,
+                                    'comments': [],
+                                    'sentiments': []
+                                }
+                            posts[post_id]['comments'].append(comment)
+                            posts[post_id]['sentiments'].append(sentiment)
+                        
+                        with st.expander("🧵 Threads Analysis", expanded=True):
+                            st.subheader("Threads Sentiment Analysis")
+                            
+                            for post_id, post_data in posts.items():
+                                with st.container():
+                                    # Threads-styled post card
+                                    st.markdown(f"""
+                                    <div style="
+                                        background: linear-gradient(145deg, #000000, #333333, #8A3FFC);
+                                        border-radius: 10px;
+                                        padding: 15px;
+                                        margin-bottom: 20px;
+                                        color: white;
+                                        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                                        transition: all 0.3s ease;
+                                        text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+                                    ">
+                                        <h4 style="margin-top:0;">
+                                            <a href="{post_data['url']}" target="_blank" style="color: white; text-decoration: none;">
+                                                {post_data['caption'][:100]}{'...' if len(post_data['caption']) > 100 else ''}
+                                            </a>
+                                        </h4>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                    # Sentiment metrics
+                                    post_sentiments = post_data['sentiments']
+                                    pos_count = post_sentiments.count('Positive')
+                                    neu_count = post_sentiments.count('Neutral')
+                                    neg_count = post_sentiments.count('Negative')
+                                    total = len(post_sentiments)
+                                    
+                                    st.markdown(f"""
+                                    <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                                        <div style="flex: 1; background: #4CAF5010; border-left: 4px solid #4CAF50; border-radius: 5px; padding: 10px;">
+                                            <div style="font-size: 12px; color: #4CAF50;">Positive</div>
+                                            <div style="font-size: 16px; font-weight: bold;">{pos_count} ({pos_count/total*100:.1f}%)</div>
+                                        </div>
+                                        <div style="flex: 1; background: #FFC10710; border-left: 4px solid #FFC107; border-radius: 5px; padding: 10px;">
+                                            <div style="font-size: 12px; color: #FFC107;">Neutral</div>
+                                            <div style="font-size: 16px; font-weight: bold;">{neu_count} ({neu_count/total*100:.1f}%)</div>
+                                        </div>
+                                        <div style="flex: 1; background: #F4433610; border-left: 4px solid #F44336; border-radius: 5px; padding: 10px;">
+                                            <div style="font-size: 12px; color: #F44336;">Negative</div>
+                                            <div style="font-size: 16px; font-weight: bold;">{neg_count} ({neg_count/total*100:.1f}%)</div>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    
+                                    # Comments display
+                                    for comment, sentiment in zip(post_data['comments'], post_data['sentiments']):
+                                        color = "#4CAF50" if sentiment == "Positive" else "#F44336" if sentiment == "Negative" else "#FFC107"
+                                        emoji = "👍" if sentiment == "Positive" else "👎" if sentiment == "Negative" else "💬"
+                                        
+                                        st.markdown(f"""
+                                        <div style="
+                                            background: {color}10;
+                                            border-left: 4px solid {color};
+                                            border-radius: 4px;
+                                            padding: 10px;
+                                            margin: 5px 0;
+                                            font-size: 14px;
+                                        ">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <span style="font-size: 18px;">{emoji}</span>
+                                                <span>{comment}</span>
+                                            </div>
+                                            <div style="margin-top: 5px; font-size: 12px; color: {color};">
+                                                Sentiment: <strong>{sentiment}</strong>
+                                            </div>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                    
+                                    # # Generate AI recommendations for this thread
+                                    # with st.spinner("Generating AI insights..."):
+                                    #     try:
+                                    #         # Prepare comment samples for context
+                                    #         sample_comments = "\n".join([f"- {c}" for c in post_data['comments'][:5]])
+                                            
+                                    #         response = llm.invoke(f"""
+                                    #         Analyze this Threads post and its replies to provide 2-3 actionable recommendations:
+
+                                    #         Post Content: {post_data['caption']}
+                                            
+                                    #         Sentiment Distribution:
+                                    #         - Positive: {pos_count} ({pos_count/total*100:.1f}%)
+                                    #         - Neutral: {neu_count} ({neu_count/total*100:.1f}%)
+                                    #         - Negative: {neg_count} ({neg_count/total*100:.1f}%)
+                                            
+                                    #         Sample Comments:
+                                    #         {sample_comments}
+                                            
+                                    #         Provide concise recommendations focusing on:
+                                    #         1. How to improve engagement based on positive feedback
+                                    #         2. How to address any concerns from negative comments
+                                    #         3. Content strategy adjustments if needed
+                                            
+                                    #         Format as bullet points with �, 🧶, and 🪡 emojis.
+                                    #         """)
+                                            
+                                    #         # Display recommendations in styled card
+                                    #         st.markdown(f"""
+                                    #         <div style="
+                                    #             background: #F5F8FA;
+                                    #             border-radius: 10px;
+                                    #             padding: 15px;
+                                    #             margin: 20px 0;
+                                    #             border-left: 4px solid #000000;
+                                    #         ">
+                                    #             <h4 style="margin-top:0; color: #000000;">AI Recommendations</h4>
+                                    #             {response.content}
+                                    #         </div>
+                                    #         """, unsafe_allow_html=True)
+                                    #     except Exception as e:
+                                    #         st.error(f"Couldn't generate recommendations: {str(e)}")
+                            
+                            platform_names.append('Threads')
+
+            # ========== RESULTS DISPLAY ==========
+            if not all_results:
+                st.warning("No comments found for the selected platforms.")
+                return
+                
+            results_df = pd.concat(all_results, ignore_index=True)
+            
+            # Visualization and download sections
+            st.markdown('<div class="section-header">📊 Analysis Results</div>', unsafe_allow_html=True)
+            
+            # Platform tabs
+            tabs = st.tabs([f"{platform} Results" for platform in platform_names])
+            for i, platform in enumerate(platform_names):
+                with tabs[i]:
+                    platform_df = results_df[results_df['Platform'] == platform]
+                    st.dataframe(platform_df)
+                    
+                    sentiment_counts = platform_df['Sentiment'].value_counts(normalize=True) * 100
+                    st.markdown(f"**Sentiment Distribution for {platform}**")
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Positive", f"{sentiment_counts.get('Positive', 0):.1f}%")
+                    col2.metric("Negative", f"{sentiment_counts.get('Negative', 0):.1f}%")
+                    col3.metric("Neutral", f"{sentiment_counts.get('Neutral', 0):.1f}%")
+            
+            # Visualizations
+            st.markdown('<div class="section-header">📈 Combined Sentiment Analysis</div>', unsafe_allow_html=True)
+            visualize_sentiment_distribution(results_df)
+            
+            # Model metrics
+            st.markdown('<div class="section-header">🤖 Model Performance</div>', unsafe_allow_html=True)
+            st.table(pd.DataFrame({
+                'Metric': ['Accuracy', 'F1 Score', 'Precision', 'Recall'],
+                'Value': [f"{metrics['accuracy']:.4f}", f"{metrics['f1_score']:.4f}", f"{metrics['precision']:.4f}", f"{metrics['recall']:.4f}"]
+            }))
+            
+            # Download options
+            st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
+            col1, col2 = st.columns(2)
+            col1.download_button(
+                "Download as CSV",
+                data=results_df.to_csv(index=False),
+                file_name="multi_platform_sentiment.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+            col2.download_button(
+                "Download as JSON",
+                data=results_df.to_json(orient='records'),
+                file_name="multi_platform_sentiment.json",
+                mime="application/json",
+                use_container_width=True
+            )
+                
+        except Exception as e:
+            st.error(f"Analysis failed: {str(e)}")
+
 
 def settings_page():
     """Display and handle the settings page"""
@@ -606,6 +1222,9 @@ def main():
         if st.button("🏠 Home", use_container_width=True):
             st.session_state.page = 'home'
         
+        if st.button("📊 Comments Analysis", use_container_width=True):
+            st.session_state.page = 'comments'
+        
         if st.button("⚙️ Settings", use_container_width=True):
             st.session_state.page = 'settings'
         
@@ -630,7 +1249,7 @@ def main():
         threads_status = "✅ Configured" if (os.getenv("THREADS_TOKEN") and os.getenv("THREADS_ID")) else "⚠️ Not Configured"
         st.markdown(f"**Threads**: {threads_status}")
         
-        st.markdown("---")
+        st.markdown("---") 
         st.markdown("### About")
         st.info("""
         SocialCrewAI uses a team of AI agents to research trending topics and create tailored content for multiple social media platforms.
@@ -643,6 +1262,8 @@ def main():
         home_page()
     elif st.session_state.page == 'settings':
         settings_page()
+    elif st.session_state.page == 'comments':
+        comments_analysis_page()
 
 if __name__ == "__main__":
     main()
